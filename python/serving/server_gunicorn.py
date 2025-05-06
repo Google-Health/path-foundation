@@ -46,7 +46,7 @@ class PredictionExecutor(inline_prediction_executor.InlinePredictionExecutor):
   def __init__(self):
     self._pete_predictor = pete_predictor_v2.PetePredictor()
     self._exitstack = contextlib.ExitStack()
-    super().__init__(self._run_request)
+    super().__init__(self._run_request, server_model_runner.ServerModelRunner)
 
   def _run_request(
       self,
