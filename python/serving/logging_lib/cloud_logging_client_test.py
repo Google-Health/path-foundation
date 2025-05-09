@@ -65,6 +65,11 @@ class CloudLoggingTest(parameterized.TestCase):
         True
     )
     self.enter_context(flagsaver.flagsaver(ops_log_project='TEST_PROJECT'))
+    self._mock_client_instance = mock.create_autospec(
+        cloud_logging.Client, instance=True
+    )
+    self._mock_client_instance._handlers = set()
+    self._mock_client_instance.project = ''
 
   def tearDown(self):
     # force cloud logger to re-initalize for each unit test.
@@ -892,8 +897,13 @@ class CloudLoggingTest(parameterized.TestCase):
     )
 
   def test_cloud_logging_client_instance_fork_shutdown_handler(self):
-    client = mock.create_autospec(cloud_logging.Client, instance=True)
-    client.project = ''
+    with mock.patch.object(
+        cloud_logging,
+        'Client',
+        autospec=True,
+        return_value=self._mock_client_instance,
+    ):
+      client = cloud_logging.Client()
     handler = cloud_logging.handlers.CloudLoggingHandler(
         client=client,
         name='foo',
@@ -928,40 +938,40 @@ class CloudLoggingTest(parameterized.TestCase):
     ):
       cloud_logging_client.CloudLoggingClient()
 
-  @mock.patch.object(
-      cloud_logging,
-      'Client',
-      autospec=True,
-      return_type=mock.create_autospec(cloud_logging.Client, instance=True),
-  )
   @flagsaver.flagsaver(debug_logging_use_absl_logging=False)
-  def test_first_logger_calls_startup(self, unused_client_mock):
+  def test_first_logger_calls_startup(self):
     with mock.patch.object(
-        cloud_logging_client.CloudLoggingClient,
-        'debug',
+        cloud_logging,
+        'Client',
         autospec=True,
-    ) as mock_debug:
-      cloud_logging_client.logger().info('test')
+        return_value=self._mock_client_instance,
+    ):
+      with mock.patch.object(
+          cloud_logging_client.CloudLoggingClient,
+          'debug',
+          autospec=True,
+      ) as mock_debug:
+        cloud_logging_client.logger().info('test')
     self.assertEqual(mock_debug.call_count, 5)
     self.assertTrue(
         cloud_logging_client.CloudLoggingClient._startup_message_logged
     )
 
-  @mock.patch.object(
-      cloud_logging,
-      'Client',
-      autospec=True,
-      return_type=mock.create_autospec(cloud_logging.Client, instance=True),
-  )
   @flagsaver.flagsaver(debug_logging_use_absl_logging=False)
-  def test_second_logger_call_not_call_startup(self, *unused_mocks):
-    cloud_logging_client.logger().info('test')
+  def test_second_logger_call_not_call_startup(self):
     with mock.patch.object(
-        cloud_logging_client.CloudLoggingClient,
-        'debug',
+        cloud_logging,
+        'Client',
         autospec=True,
-    ) as mock_debug:
+        return_value=self._mock_client_instance,
+    ):
       cloud_logging_client.logger().info('test')
+      with mock.patch.object(
+          cloud_logging_client.CloudLoggingClient,
+          'debug',
+          autospec=True,
+      ) as mock_debug:
+        cloud_logging_client.logger().info('test')
     mock_debug.assert_not_called()
     self.assertTrue(
         cloud_logging_client.CloudLoggingClient._startup_message_logged
@@ -978,21 +988,19 @@ class CloudLoggingTest(parameterized.TestCase):
     self.assertEqual(logger.log_error_level, test_value)
 
   @flagsaver.flagsaver(debug_logging_use_absl_logging=False)
-  @mock.patch.object(
-      cloud_logging,
-      'Client',
-      autospec=True,
-      return_type=mock.create_autospec(cloud_logging.Client, instance=True),
-  )
-  def test_cloud_logging_client_instance_python_logger_init_if_none(
-      self, unused_mock_client
-  ):
-    instance = cloud_logging_client_instance.CloudLoggingClientInstance(
-        use_absl_logging=False
-    )
-    cloud_logging_client_instance.CloudLoggingClientInstance._cloud_logging_handler = (
-        None
-    )
+  def test_cloud_logging_client_instance_python_logger_init_if_none(self):
+    with mock.patch.object(
+        cloud_logging,
+        'Client',
+        autospec=True,
+        return_value=self._mock_client_instance,
+    ):
+      instance = cloud_logging_client_instance.CloudLoggingClientInstance(
+          use_absl_logging=False
+      )
+      cloud_logging_client_instance.CloudLoggingClientInstance._cloud_logging_handler = (
+          None
+      )
     self.assertIsNotNone(instance.python_logger)
 
   @parameterized.named_parameters(
@@ -1038,26 +1046,25 @@ class CloudLoggingTest(parameterized.TestCase):
           log_all=True,
       ),
   ])
-  @mock.patch.object(
-      cloud_logging,
-      'Client',
-      autospec=True,
-      return_type=mock.create_autospec(cloud_logging.Client, instance=True),
-  )
   def test_client_instance_cloud_logging_init(
       self,
-      unused_mock_client,
       log_all,
       logger_name,
   ):
     project_name = 'test_project'
     log_name = 'test_log'
-    instance = cloud_logging_client_instance.CloudLoggingClientInstance(
-        gcp_project_to_write_logs_to=project_name,
-        log_name=log_name,
-        log_all_python_logs_to_cloud=log_all,
-        use_absl_logging=False,
-    )
+    with mock.patch.object(
+        cloud_logging,
+        'Client',
+        autospec=True,
+        return_value=self._mock_client_instance,
+    ):
+      instance = cloud_logging_client_instance.CloudLoggingClientInstance(
+          gcp_project_to_write_logs_to=project_name,
+          log_name=log_name,
+          log_all_python_logs_to_cloud=log_all,
+          use_absl_logging=False,
+      )
     self.assertIsNotNone(
         cloud_logging_client_instance.CloudLoggingClientInstance._cloud_logging_handler
     )
@@ -1131,32 +1138,31 @@ class CloudLoggingTest(parameterized.TestCase):
           log_all=True,
       ),
   ])
-  @mock.patch.object(
-      cloud_logging,
-      'Client',
-      autospec=True,
-      return_type=mock.create_autospec(cloud_logging.Client, instance=True),
-  )
   def test_duplicate_compatiable_handler_init_succeeds(
       self,
-      unused_mock_client,
       log_all,
       logger_name,
   ):
     project_name = 'test_project'
     log_name = 'test_log'
-    cloud_logging_client_instance.CloudLoggingClientInstance(
-        gcp_project_to_write_logs_to=project_name,
-        log_name=log_name,
-        log_all_python_logs_to_cloud=log_all,
-        use_absl_logging=False,
-    )
-    instance = cloud_logging_client_instance.CloudLoggingClientInstance(
-        gcp_project_to_write_logs_to=project_name,
-        log_name=log_name,
-        log_all_python_logs_to_cloud=log_all,
-        use_absl_logging=False,
-    )
+    with mock.patch.object(
+        cloud_logging,
+        'Client',
+        autospec=True,
+        return_value=self._mock_client_instance,
+    ):
+      cloud_logging_client_instance.CloudLoggingClientInstance(
+          gcp_project_to_write_logs_to=project_name,
+          log_name=log_name,
+          log_all_python_logs_to_cloud=log_all,
+          use_absl_logging=False,
+      )
+      instance = cloud_logging_client_instance.CloudLoggingClientInstance(
+          gcp_project_to_write_logs_to=project_name,
+          log_name=log_name,
+          log_all_python_logs_to_cloud=log_all,
+          use_absl_logging=False,
+      )
     self.assertIsNotNone(
         cloud_logging_client_instance.CloudLoggingClientInstance._cloud_logging_handler
     )
@@ -1200,15 +1206,8 @@ class CloudLoggingTest(parameterized.TestCase):
           log_all_2=False,
       ),
   ])
-  @mock.patch.object(
-      cloud_logging,
-      'Client',
-      autospec=True,
-      return_type=mock.create_autospec(cloud_logging.Client, instance=True),
-  )
   def test_duplicate_incompatiable_loggers_fail(
       self,
-      unused_mock_client,
       project_name_1,
       log_name_1,
       log_all_1,
@@ -1216,21 +1215,27 @@ class CloudLoggingTest(parameterized.TestCase):
       log_name_2,
       log_all_2,
   ):
-    cloud_logging_client_instance.CloudLoggingClientInstance(
-        gcp_project_to_write_logs_to=project_name_1,
-        log_name=log_name_1,
-        log_all_python_logs_to_cloud=log_all_1,
-        use_absl_logging=False,
-    )
-    with self.assertRaises(
-        cloud_logging_client_instance.CloudLoggerInstanceExceptionError
+    with mock.patch.object(
+        cloud_logging,
+        'Client',
+        autospec=True,
+        return_value=self._mock_client_instance,
     ):
       cloud_logging_client_instance.CloudLoggingClientInstance(
-          gcp_project_to_write_logs_to=project_name_2,
-          log_name=log_name_2,
-          log_all_python_logs_to_cloud=log_all_2,
+          gcp_project_to_write_logs_to=project_name_1,
+          log_name=log_name_1,
+          log_all_python_logs_to_cloud=log_all_1,
           use_absl_logging=False,
       )
+      with self.assertRaises(
+          cloud_logging_client_instance.CloudLoggerInstanceExceptionError
+      ):
+        cloud_logging_client_instance.CloudLoggingClientInstance(
+            gcp_project_to_write_logs_to=project_name_2,
+            log_name=log_name_2,
+            log_all_python_logs_to_cloud=log_all_2,
+            use_absl_logging=False,
+        )
 
   def test_enable_e_structured_logging_default(self):
     instance = cloud_logging_client_instance.CloudLoggingClientInstance()
@@ -1270,17 +1275,17 @@ class CloudLoggingTest(parameterized.TestCase):
     )
     self.assertEqual(instance.log_name, log_name)
 
-  @mock.patch.object(
-      cloud_logging,
-      'Client',
-      autospec=True,
-      return_type=mock.create_autospec(cloud_logging.Client, instance=True),
-  )
-  def test_undefined_log_name_raises(self, unused_mock_client):
-    with self.assertRaises(ValueError):
-      cloud_logging_client_instance.CloudLoggingClientInstance(
-          log_name='', use_absl_logging=False
-      )
+  def test_undefined_log_name_raises(self):
+    with mock.patch.object(
+        cloud_logging,
+        'Client',
+        autospec=True,
+        return_value=self._mock_client_instance,
+    ):
+      with self.assertRaises(ValueError):
+        cloud_logging_client_instance.CloudLoggingClientInstance(
+            log_name='', use_absl_logging=False
+        )
 
   @mock.patch.dict(os.environ, {'GOOGLE_CLOUD_PROJECT': 'TEST_PROJECT'})
   def test_undefined_pod_uid_raises(self):
@@ -1368,28 +1373,28 @@ class CloudLoggingTest(parameterized.TestCase):
           testcase_name='abseil_logging', use_absl_logging=True, expected=True
       ),
   ])
-  @mock.patch.object(
-      cloud_logging,
-      'Client',
-      autospec=True,
-      return_type=mock.create_autospec(cloud_logging.Client, instance=True),
-  )
   def test_python_logging_handler_reinit_if_called_across_process_forks(
-      self, unused_mock, use_absl_logging, expected
+      self, use_absl_logging, expected
   ):
-    cl = cloud_logging_client_instance.CloudLoggingClientInstance(
-        use_absl_logging=use_absl_logging
-    )
-    logger_1 = cl.python_logger
-    handler_1 = (
-        cloud_logging_client_instance.CloudLoggingClientInstance._cloud_logging_handler
-    )
-    cloud_logging_client_instance.CloudLoggingClientInstance._init_fork_module_state()
+    with mock.patch.object(
+        cloud_logging,
+        'Client',
+        autospec=True,
+        return_value=self._mock_client_instance,
+    ):
+      cl = cloud_logging_client_instance.CloudLoggingClientInstance(
+          use_absl_logging=use_absl_logging
+      )
+      logger_1 = cl.python_logger
+      handler_1 = (
+          cloud_logging_client_instance.CloudLoggingClientInstance._cloud_logging_handler
+      )
+      cloud_logging_client_instance.CloudLoggingClientInstance._init_fork_module_state()
 
-    logger_2 = cl.python_logger
-    handler_2 = (
-        cloud_logging_client_instance.CloudLoggingClientInstance._cloud_logging_handler
-    )
+      logger_2 = cl.python_logger
+      handler_2 = (
+          cloud_logging_client_instance.CloudLoggingClientInstance._cloud_logging_handler
+      )
     self.assertIsNotNone(logger_1)
     self.assertIsNotNone(logger_2)
     self.assertEqual(handler_1 is handler_2, expected)
@@ -1402,26 +1407,26 @@ class CloudLoggingTest(parameterized.TestCase):
           testcase_name='abseil_logging', use_absl_logging=True, expected=True
       ),
   ])
-  @mock.patch.object(
-      cloud_logging,
-      'Client',
-      autospec=True,
-      return_type=mock.create_autospec(cloud_logging.Client, instance=True),
-  )
   def test_python_logging_handler_reinit_if_called_repeatedly_in_same_process(
-      self, unused_mock, use_absl_logging, expected
+      self, use_absl_logging, expected
   ):
-    cl = cloud_logging_client_instance.CloudLoggingClientInstance(
-        use_absl_logging=use_absl_logging
-    )
-    logger_1 = cl.python_logger
-    handler_1 = (
-        cloud_logging_client_instance.CloudLoggingClientInstance._cloud_logging_handler
-    )
-    logger_2 = cl.python_logger
-    handler_2 = (
-        cloud_logging_client_instance.CloudLoggingClientInstance._cloud_logging_handler
-    )
+    with mock.patch.object(
+        cloud_logging,
+        'Client',
+        autospec=True,
+        return_value=self._mock_client_instance,
+    ):
+      cl = cloud_logging_client_instance.CloudLoggingClientInstance(
+          use_absl_logging=use_absl_logging
+      )
+      logger_1 = cl.python_logger
+      handler_1 = (
+          cloud_logging_client_instance.CloudLoggingClientInstance._cloud_logging_handler
+      )
+      logger_2 = cl.python_logger
+      handler_2 = (
+          cloud_logging_client_instance.CloudLoggingClientInstance._cloud_logging_handler
+      )
     self.assertIsNotNone(logger_1)
     self.assertIsNotNone(logger_2)
     self.assertEqual(handler_1 is handler_2, expected)
