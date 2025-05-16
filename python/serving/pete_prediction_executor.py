@@ -27,7 +27,7 @@ from typing import Any, Mapping
 
 from absl import app
 
-from serving.serving_framework import server_model_runner
+from serving.serving_framework.tensorflow import server_model_runner
 from serving import abstract_pete_predictor
 from serving import pete_error_mapping
 from serving import pete_errors

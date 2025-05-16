@@ -19,3 +19,4 @@ requests-mock==1.9.3
 tensorflow~=2.18.0
 
 -r serving_framework/requirements.in
+-r serving_framework/tensorflow/requirements.in

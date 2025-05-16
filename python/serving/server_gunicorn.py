@@ -31,7 +31,7 @@ from typing_extensions import override
 from serving.serving_framework import inline_prediction_executor
 from serving.serving_framework import model_runner
 from serving.serving_framework import server_gunicorn
-from serving.serving_framework import server_model_runner
+from serving.serving_framework.tensorflow import server_model_runner
 from serving import pete_error_mapping
 from serving import pete_errors
 from serving import pete_logging
