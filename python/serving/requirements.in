@@ -1,6 +1,6 @@
 absl-py~=2.1.0
 ez-wsi-dicomweb~=6.0.8
-google-cloud-aiplatform~=1.70.0
+google-cloud-aiplatform~=1.133.0
 google-cloud-logging~=3.11.3
 google-cloud-secret-manager~=2.20.2
 jsonschema~=4.23.0
